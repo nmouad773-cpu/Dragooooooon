@@ -110,7 +110,7 @@ export default {
         const upstreamResponse = await fetch(targetStreamUrl, {
           method: "GET",
           headers: {
-            "User-Agent": "FBAN/FB4A;FBAV/420.0.0.32.62;FBDM/{density=3.0,width=1080,height=2280};FBLC/ar_AR;FBCR/Inwi;FBMF/Xiaomi;FBBD/Redmi;",
+            "User-Agent": "FBAN/FB4A;FBAV/420.0.0.32.62;FBBV/503848123;FBDM/{density=3.0,width=1080,height=2280};FBLC/ar_AR;FBCR/Inwi;FBMF/Xiaomi;FBBD/Redmi;",
             "Referer": "https://www.facebook.com/watch/",
             "Origin": "https://www.facebook.com",
             "X-FB-HTTP-Engine": "Liger",
@@ -126,7 +126,7 @@ export default {
         newHeaders.set("Content-Type", pathname.endsWith("init.mp4") ? "video/mp4" : "video/iso.segment");
         newHeaders.set("Cache-Control", "no-cache, no-store, must-revalidate");
         newHeaders.set("Access-Control-Allow-Origin", "*");
-        newHeaders.set("X-FB-Video-Codec": "avc1.4d401f");
+        newHeaders.set("X-FB-Video-Codec", "avc1.4d401f");
 
         return new Response(upstreamResponse.body, {
           status: 200,
