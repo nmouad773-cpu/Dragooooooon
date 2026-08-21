@@ -69,8 +69,11 @@ ${hostUrl}/?url=http://185.191.126.127:8080//live/b0:99:d7:15:88:50/309091453664
     try {
       const targetUrl = new URL(targetStreamUrl);
       const newHeaders = new Headers();
-      newHeaders.set("Host", "m.facebook.com");
-      newHeaders.set("User-Agent", "Mozilla/5.0 (Linux; Android 10; FB_IAB/FB4A)");
+
+      // الترويسات الخاصة بتجاوز حظر BunnyCDN
+      newHeaders.set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
+      newHeaders.set("Referer", "https://hattricktv2.b-cdn.net/");
+      newHeaders.set("Origin", "https://hattricktv2.b-cdn.net");
       newHeaders.set("Accept", "*/*");
 
       const proxyRequest = new Request(targetUrl.toString(), {
@@ -81,8 +84,10 @@ ${hostUrl}/?url=http://185.191.126.127:8080//live/b0:99:d7:15:88:50/309091453664
 
       const response = await fetch(proxyRequest);
       const responseHeaders = new Headers(response.headers);
+
       responseHeaders.set("Access-Control-Allow-Origin", "*");
       responseHeaders.set("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS");
+      responseHeaders.set("Cache-Control", "no-cache");
 
       return new Response(response.body, {
         status: response.status,
