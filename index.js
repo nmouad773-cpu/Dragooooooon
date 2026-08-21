@@ -1,58 +1,53 @@
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
-    const targetStreamUrl = url.searchParams.get("url");
+    const hostUrl = `${url.protocol}//${url.host}`;
 
-    // إرجاع ملف القنوات تلقائياً عند طلب /playlist.m3u
+    // خريطة القنوات المباشرة
+    const channelMap = {
+      "bein-news": "https://hattricktv2.b-cdn.net/live/11/11/457526.ts",
+      "bein-1": "https://hattricktv2.b-cdn.net/live/11/11/275074.ts",
+      "bein-2": "https://hattricktv2.b-cdn.net/live/11/11/275073.ts",
+      "bein-3": "https://hattricktv2.b-cdn.net/live/11/11/275072.ts",
+      "bein-4": "https://hattricktv2.b-cdn.net/live/11/11/275071.ts",
+      "bein-5": "https://hattricktv2.b-cdn.net/live/11/11/275070.ts",
+      "bein-6": "https://hattricktv2.b-cdn.net/live/11/11/275069.ts",
+      "bein-7": "https://hattricktv2.b-cdn.net/live/11/11/275068.ts",
+      "bein-8": "https://hattricktv2.b-cdn.net/live/11/11/275067.ts",
+      "bein-m1": "http://pro.netmos.ovh:7355/live/UDJPRCRA1L055B/Ep27yiiwbb56mjkl/10148.ts",
+      "bein-m2": "http://pro.netmos.ovh:7355/live/UDJPRCRA1L055B/Ep27yiiwbb56mjkl/10150.ts",
+      "8m-1": "https://hattricktv2.b-cdn.net/live/11/11/344228.ts",
+      "8m-2": "https://hattricktv2.b-cdn.net/live/11/11/348540.ts",
+      "8m-3": "https://hattricktv2.b-cdn.net/live/11/11/348538.ts",
+      "mbc2": "https://hattricktv2.b-cdn.net/live/11/11/263612.ts",
+      "mbc3": "https://hattricktv2.b-cdn.net/live/11/11/263579.ts",
+      "mbc4": "https://hattricktv2.b-cdn.net/live/11/11/263576.ts",
+      "mbc5": "https://hattricktv2.b-cdn.net/live/11/11/263574.ts",
+      "al-aoula": "https://hattricktv2.b-cdn.net/live/11/11/301358.ts",
+      "2m": "https://hattricktv2.b-cdn.net/live/11/11/484165.ts",
+      "arryadia": "https://hattricktv2.b-cdn.net/live/11/11/301347.ts",
+      "quran": "http://185.191.126.127:8080//live/b0:99:d7:15:88:50/3090914536649669/413749.ts",
+      "nat-geo": "http://185.191.126.127:8080//live/b0:99:d7:15:88:50/3090914536649669/15026.ts"
+    };
+
+    // معالجة طلبات OPTIONS لفك حظر CORS كلياً
+    if (request.method === "OPTIONS") {
+      return new Response(null, {
+        headers: {
+          "Access-Control-Allow-Origin": "*",
+          "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
+          "Access-Control-Allow-Headers": "*"
+        }
+      });
+    }
+
+    // 1. توليد قائمة M3U بروابط مموهة لصيغة mp4 لتجاوز الفلترة
     if (url.pathname === "/playlist.m3u") {
-      const hostUrl = `${url.protocol}//${url.host}`;
-      const playlistContent = `#EXTM3U
-#EXTINF:-1 tvg-id="bein-news" group-title="Sports", Bein news
-${hostUrl}/?url=https://hattricktv2.b-cdn.net/live/11/11/457526.ts
-#EXTINF:-1 tvg-id="bein-1" group-title="Sports", Bein 1
-${hostUrl}/?url=https://hattricktv2.b-cdn.net/live/11/11/275074.ts
-#EXTINF:-1 tvg-id="bein-2" group-title="Sports", Bein 2
-${hostUrl}/?url=https://hattricktv2.b-cdn.net/live/11/11/275073.ts
-#EXTINF:-1 tvg-id="bein-3" group-title="Sports", Bein 3
-${hostUrl}/?url=https://hattricktv2.b-cdn.net/live/11/11/275072.ts
-#EXTINF:-1 tvg-id="bein-4" group-title="Sports", Bein 4
-${hostUrl}/?url=https://hattricktv2.b-cdn.net/live/11/11/275071.ts
-#EXTINF:-1 tvg-id="bein-5" group-title="Sports", Bein 5
-${hostUrl}/?url=https://hattricktv2.b-cdn.net/live/11/11/275070.ts
-#EXTINF:-1 tvg-id="bein-6" group-title="Sports", Bein 6
-${hostUrl}/?url=https://hattricktv2.b-cdn.net/live/11/11/275069.ts
-#EXTINF:-1 tvg-id="bein-7" group-title="Sports", Bein 7
-${hostUrl}/?url=https://hattricktv2.b-cdn.net/live/11/11/275068.ts
-#EXTINF:-1 tvg-id="bein-8" group-title="Sports", Bein 8
-${hostUrl}/?url=https://hattricktv2.b-cdn.net/live/11/11/275067.ts
-#EXTINF:-1 tvg-id="bein-m1" group-title="Movies", Bein movie 1
-${hostUrl}/?url=http://pro.netmos.ovh:7355/live/UDJPRCRA1L055B/Ep27yiiwbb56mjkl/10148.ts
-#EXTINF:-1 tvg-id="bein-m2" group-title="Movies", Bein movie 2
-${hostUrl}/?url=http://pro.netmos.ovh:7355/live/UDJPRCRA1L055B/Ep27yiiwbb56mjkl/10150.ts
-#EXTINF:-1 tvg-id="8m-1" group-title="General", الثمانية 1
-${hostUrl}/?url=https://hattricktv2.b-cdn.net/live/11/11/344228.ts
-#EXTINF:-1 tvg-id="8m-2" group-title="General", الثمانية 2
-${hostUrl}/?url=https://hattricktv2.b-cdn.net/live/11/11/348540.ts
-#EXTINF:-1 tvg-id="8m-3" group-title="General", الثمانية 3
-${hostUrl}/?url=https://hattricktv2.b-cdn.net/live/11/11/348538.ts
-#EXTINF:-1 tvg-id="mbc2" group-title="Entertainment", Mbc 2
-${hostUrl}/?url=https://hattricktv2.b-cdn.net/live/11/11/263612.ts
-#EXTINF:-1 tvg-id="mbc3" group-title="Entertainment", Mbc 3
-${hostUrl}/?url=https://hattricktv2.b-cdn.net/live/11/11/263579.ts
-#EXTINF:-1 tvg-id="mbc4" group-title="Entertainment", Mbc 4
-${hostUrl}/?url=https://hattricktv2.b-cdn.net/live/11/11/263576.ts
-#EXTINF:-1 tvg-id="mbc5" group-title="Entertainment", Mbc 5
-${hostUrl}/?url=https://hattricktv2.b-cdn.net/live/11/11/263574.ts
-#EXTINF:-1 tvg-id="al-aoula" group-title="Moroccan", Al aoula
-${hostUrl}/?url=https://hattricktv2.b-cdn.net/live/11/11/301358.ts
-#EXTINF:-1 tvg-id="2m" group-title="Moroccan", 2m maroc
-${hostUrl}/?url=https://hattricktv2.b-cdn.net/live/11/11/484165.ts
-#EXTINF:-1 tvg-id="arryadia" group-title="Moroccan", Arryadia hd
-${hostUrl}/?url=https://hattricktv2.b-cdn.net/live/11/11/301347.ts
-#EXTINF:-1 tvg-id="quran" group-title="Islamic", قران الكريم
-${hostUrl}/?url=http://185.191.126.127:8080//live/b0:99:d7:15:88:50/3090914536649669/413749.ts
-#EXTINF:-1 tvg-id="nat-geo" group-title="Documentary", National geographic
-${hostUrl}/?url=http://185.191.126.127:8080//live/b0:99:d7:15:88:50/3090914536649669/15026.ts`;
+      let playlistContent = `#EXTM3U\n`;
+      for (const key in channelMap) {
+        playlistContent += `#EXTINF:-1 tvg-id="${key}" group-title="Dragon Live", ${key.toUpperCase()}\n`;
+        playlistContent += `${hostUrl}/video/${key}.mp4\n`;
+      }
 
       return new Response(playlistContent, {
         headers: {
@@ -62,32 +57,49 @@ ${hostUrl}/?url=http://185.191.126.127:8080//live/b0:99:d7:15:88:50/309091453664
       });
     }
 
+    // 2. التقاط معرف القناة وتحديد رابط المصدر الأصلي
+    let targetStreamUrl = null;
+
+    if (url.pathname.startsWith("/video/")) {
+      const channelKey = url.pathname.replace("/video/", "").replace(".mp4", "").replace(".ts", "");
+      targetStreamUrl = channelMap[channelKey];
+    } else {
+      targetStreamUrl = url.searchParams.get("url");
+    }
+
     if (!targetStreamUrl) {
-      return new Response("Dragon Live Proxy - Active", { status: 200 });
+      return new Response("Dragon Live Proxy - *6 Active", { status: 200 });
     }
 
     try {
       const targetUrl = new URL(targetStreamUrl);
-      const newHeaders = new Headers();
+      const fbHeaders = new Headers();
 
-      // الترويسات الخاصة بتجاوز حظر BunnyCDN
-      newHeaders.set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
-      newHeaders.set("Referer", "https://hattricktv2.b-cdn.net/");
-      newHeaders.set("Origin", "https://hattricktv2.b-cdn.net");
-      newHeaders.set("Accept", "*/*");
+      // **أقوى خلطة هيدرات لانتحال سيرفرات فيسبوك بالكامل**
+      fbHeaders.set("User-Agent", "FBAN/FB4A;FBAV/420.0.0.32.62;FBBV/503848123;FBDM/{density=3.0,width=1080,height=2280};FBLC/ar_AR;FBCR/Inwi;FBMF/Xiaomi;FBBD/Redmi;");
+      fbHeaders.set("Referer", "https://www.facebook.com/watch/");
+      fbHeaders.set("Origin", "https://www.facebook.com");
+      fbHeaders.set("Host", targetUrl.host);
+      fbHeaders.set("X-FB-HTTP-Engine", "Liger");
+      fbHeaders.set("X-FB-Net-HNI", "60402"); // Inwi / Telecom MNC
+      fbHeaders.set("X-FB-SIM-HNI", "60402");
+      fbHeaders.set("Accept", "video/webm,video/ogg,video/*;q=0.9,application/ogg,*/*;q=0.8");
+      fbHeaders.set("Accept-Language", "ar,en-US;q=0.7,en;q=0.3");
 
       const proxyRequest = new Request(targetUrl.toString(), {
         method: request.method,
-        headers: newHeaders,
+        headers: fbHeaders,
         redirect: "follow"
       });
 
       const response = await fetch(proxyRequest);
       const responseHeaders = new Headers(response.headers);
 
+      // التظاهر بأن الاستجابة قادمة كبث ميديا من فيسبوك
       responseHeaders.set("Access-Control-Allow-Origin", "*");
       responseHeaders.set("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS");
-      responseHeaders.set("Cache-Control", "no-cache");
+      responseHeaders.set("Cache-Control", "no-cache, no-store, must-revalidate");
+      responseHeaders.set("Content-Type", "video/mp2t");
 
       return new Response(response.body, {
         status: response.status,
