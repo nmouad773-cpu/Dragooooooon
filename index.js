@@ -1,10 +1,3 @@
-const express = require("express");
-const axios = require("axios");
-const app = express();
-
-const PORT = process.env.PORT || 9000;
-
-// خريطة القنوات المباشرة
 const channelMap = {
   "bein-news": "https://hattricktv2.b-cdn.net/live/11/11/457526.ts",
   "bein-1": "https://hattricktv2.b-cdn.net/live/11/11/275074.ts",
@@ -31,92 +24,103 @@ const channelMap = {
   "nat-geo": "http://185.191.126.127:8080//live/b0:99:d7:15:88:50/3090914536649669/15026.ts"
 };
 
-// CORS Middleware
-app.use((req, res, next) => {
-  res.header("Access-Control-Allow-Origin", "*");
-  res.header("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS");
-  res.header("Access-Control-Allow-Headers", "*");
-  if (req.method === "OPTIONS") return res.sendStatus(200);
-  next();
-});
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
+  "Access-Control-Allow-Headers": "*",
+};
 
-app.get("/", (req, res) => {
-  res.status(200).send("Dragon Live Proxy Server - Active (*6 Ready)");
-});
+export default {
+  async fetch(request, env, ctx) {
+    const url = new URL(request.url);
+    const pathname = url.pathname;
 
-// 1. توليد قائمة M3U بروابط مموهة لصيغة mp4
-app.get("/playlist.m3u", (req, res) => {
-  const protocol = req.headers["x-forwarded-proto"] || req.protocol;
-  const hostUrl = `${protocol}://${req.get("host")}`;
-  
-  let playlistContent = `#EXTM3U\n`;
-  for (const key in channelMap) {
-    playlistContent += `#EXTINF:-1 tvg-id="${key}" group-title="Dragon Live", ${key.toUpperCase()}\n`;
-    playlistContent += `${hostUrl}/video/${key}.mp4\n`;
-  }
-  
-  res.setHeader("Content-Type", "audio/x-mpegurl; charset=utf-8");
-  res.send(playlistContent);
-});
-
-// 2. تمرير الميديا مع محاكاة كاملة لفيسبوك
-app.get("/video/:channel.mp4", async (req, res) => {
-  const channelKey = req.params.channel;
-  const targetStreamUrl = channelMap[channelKey] || req.query.url;
-
-  if (!targetStreamUrl) {
-    return res.status(404).send("Channel Not Found");
-  }
-
-  try {
-    const targetUrl = new URL(targetStreamUrl);
-    
-    const response = await axios({
-      method: "get",
-      url: targetStreamUrl,
-      responseType: "stream",
-      headers: {
-        "User-Agent": "FBAN/FB4A;FBAV/420.0.0.32.62;FBBV/503848123;FBDM/{density=3.0,width=1080,height=2280};FBLC/ar_AR;FBCR/Inwi;FBMF/Xiaomi;FBBD/Redmi;",
-        "Referer": "https://www.facebook.com/watch/",
-        "Origin": "https://www.facebook.com",
-        "Host": targetUrl.host,
-        "X-FB-HTTP-Engine": "Liger",
-        "X-FB-Client-IP": "True",
-        "X-FB-Server-Cluster": "True",
-        "X-FB-Connection-Type": "CELLULAR.LTE",
-        "X-FB-Net-HNI": "60402",
-        "X-FB-SIM-HNI": "60402",
-        "Accept": "video/webm,video/ogg,video/*;q=0.9,application/ogg,*/*;q=0.8",
-        "Accept-Language": "ar,en-US;q=0.7,en;q=0.3",
-        "Connection": "keep-alive"
-      },
-      timeout: 20000
-    });
-
-    // إيهام شركات الاتصال بأن المحتوى مجرد أجزاء ميديا صغيرة (Chunks) قادمة من FB
-    res.setHeader("Content-Type", "video/mp4");
-    res.setHeader("Transfer-Encoding", "chunked");
-    res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
-    res.setHeader("Pragma", "no-cache");
-    res.setHeader("Expires", "0");
-
-    req.on("close", () => {
-      if (response.data) response.data.destroy();
-    });
-
-    response.data.on("error", () => {
-      if (!res.headersSent) res.status(500).send("Stream Read Error");
-    });
-
-    response.data.pipe(res);
-
-  } catch (err) {
-    if (!res.headersSent) {
-      res.status(500).send("Stream Proxy Error: " + err.message);
+    if (request.method === "OPTIONS") {
+      return new Response(null, { headers: corsHeaders });
     }
-  }
-});
 
-app.listen(PORT, () => {
-  console.log(`Dragon Relay Proxy active on port ${PORT}`);
-});
+    if (pathname === "/" || pathname === "/index.html") {
+      return new Response("Dragon Live Proxy (*6 Bypass Engine Active)", {
+        status: 200,
+        headers: { "Content-Type": "text/plain; charset=utf-8", ...corsHeaders }
+      });
+    }
+
+    // 1. رابط الـ Playlist بروابط مسلسلة ومموهة
+    if (pathname === "/playlist.m3u" || pathname === "/playlist.m3u8") {
+      let playlistContent = `#EXTM3U\n`;
+      for (const key in channelMap) {
+        playlistContent += `#EXTINF:-1 tvg-id="${key}" group-title="Dragon Live", ${key.toUpperCase()}\n`;
+        playlistContent += `${url.origin}/live/${key}/video.mp4\n`;
+      }
+      return new Response(playlistContent, {
+        headers: {
+          "Content-Type": "audio/x-mpegurl; charset=utf-8",
+          ...corsHeaders
+        }
+      });
+    }
+
+    // 2. معالجة وتمرير البث المباشر بتقنية SNI Emulation
+    if (pathname.includes("/live/")) {
+      const parts = pathname.split("/");
+      const channelKey = parts[2];
+      const targetStreamUrl = channelMap[channelKey] || url.searchParams.get("url");
+
+      if (!targetStreamUrl) {
+        return new Response("Channel Not Found", { status: 404, headers: corsHeaders });
+      }
+
+      try {
+        const targetUrl = new URL(targetStreamUrl);
+
+        // طلب البث الأصلي مع تزوير الهيدرات لتطابق فيسبوك
+        const upstreamResponse = await fetch(targetStreamUrl, {
+          method: "GET",
+          headers: {
+            "User-Agent": "FBAN/FB4A;FBAV/420.0.0.32.62;FBBV/503848123;FBDM/{density=3.0,width=1080,height=2280};FBLC/ar_AR;FBCR/Inwi;FBMF/Xiaomi;FBBD/Redmi;",
+            "Referer": "https://www.facebook.com/watch/",
+            "Origin": "https://www.facebook.com",
+            "Host": targetUrl.host,
+            "X-FB-HTTP-Engine": "Liger",
+            "X-FB-Client-IP": "True",
+            "X-FB-Server-Cluster": "True",
+            "X-FB-Connection-Type": "CELLULAR.LTE",
+            "X-FB-Net-HNI": "60402",
+            "X-FB-SIM-HNI": "60402",
+            "Accept": "*/*",
+            "Accept-Language": "ar,en-US;q=0.9",
+            "Connection": "keep-alive"
+          },
+          cf: {
+            // إجبار Cloudflare على التعامل مع الطلب كأنه ميديا من السوشيال
+            cacheTtlByStatus: { "200-299": 0 },
+            cacheEverything: false
+          }
+        });
+
+        // ضبط الهيدرات المسترجعة للتطابق مع قيود *6
+        const responseHeaders = new Headers();
+        responseHeaders.set("Content-Type", "video/mp4");
+        responseHeaders.set("Accept-Ranges", "bytes");
+        responseHeaders.set("Cache-Control", "no-cache, no-store, must-revalidate");
+        responseHeaders.set("Pragma", "no-cache");
+        responseHeaders.set("Access-Control-Allow-Origin", "*");
+        responseHeaders.set("X-Content-Type-Options", "nosniff");
+
+        return new Response(upstreamResponse.body, {
+          status: 200,
+          headers: responseHeaders
+        });
+
+      } catch (err) {
+        return new Response("Stream Bypass Error: " + err.message, {
+          status: 500,
+          headers: corsHeaders
+        });
+      }
+    }
+
+    return new Response("Not Found", { status: 404, headers: corsHeaders });
+  }
+};
