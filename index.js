@@ -39,21 +39,14 @@ export default {
       return new Response(null, { headers: corsHeaders });
     }
 
-    if (pathname === "/" || pathname === "/index.html") {
-      return new Response("Dragon Live DASH MPD Engine Active", {
-        status: 200,
-        headers: { "Content-Type": "text/plain; charset=utf-8", ...corsHeaders }
-      });
-    }
-
-    // 1. القائمة الرئيسية بتنسيق M3U تحتوي على روابط .mpd لكل قناة
-    if (pathname === "/playlist.m3u" || pathname === "/playlist.mpd") {
-      let playlistContent = `#EXTM3U\n`;
+    // 1. رابط القائمة المباشرة للمشغل
+    if (pathname === "/playlist.m3u" || pathname === "/playlist.m3u8") {
+      let playlist = `#EXTM3U\n`;
       for (const key in channelMap) {
-        playlistContent += `#EXTINF:-1 tvg-id="${key}" group-title="Dragon Live", ${key.toUpperCase()}\n`;
-        playlistContent += `${url.origin}/dash/${key}/manifest.mpd\n`;
+        playlist += `#EXTINF:-1 tvg-id="${key}" group-title="Dragon Live", ${key.toUpperCase()}\n`;
+        playlist += `${url.origin}/fb-cdn/live/${key}/video.mp4\n`;
       }
-      return new Response(playlistContent, {
+      return new Response(playlist, {
         headers: {
           "Content-Type": "audio/x-mpegurl; charset=utf-8",
           ...corsHeaders
@@ -61,107 +54,52 @@ export default {
       });
     }
 
-    // 2. توليد Dynamic DASH Manifest (.mpd) بتنسيق خوادم Facebook Video
-    if (pathname.endsWith("/manifest.mpd")) {
+    // 2. محرك التمويه المتقدم لـ *6 (Facebook CDN Engine)
+    if (pathname.includes("/fb-cdn/live/")) {
       const parts = pathname.split("/");
-      const channelKey = parts[2];
+      const channelKey = parts[3];
+      const targetUrl = channelMap[channelKey];
 
-      const mpdXml = `<?xml version="1.0" encoding="UTF-8"?>
-<MPD xmlns="urn:mpeg:dash:schema:mpd:2011"
-     xmlns:fb="urn:facebook:dash"
-     profiles="urn:mpeg:dash:profile:isoff-live:2011"
-     type="dynamic"
-     minimumUpdatePeriod="PT2S"
-     minBufferTime="PT1S"
-     timeShiftBufferDepth="PT30S">
-  <Period id="0" start="PT0S">
-    <AdaptationSet id="0" contentType="video" mimeType="video/mp4" segmentAlignment="true" startWithSAP="1">
-      <Representation id="fb_hd" bandwidth="2000000" codecs="avc1.4d401f" width="1280" height="720">
-        <SegmentTemplate timescale="1000" 
-                         initialization="${url.origin}/dash/${channelKey}/init.mp4" 
-                         media="${url.origin}/dash/${channelKey}/segment_$Number$.m4s">
-          <SegmentTimeline>
-            <S t="0" d="2000" r="-1" />
-          </SegmentTimeline>
-        </SegmentTemplate>
-      </Representation>
-    </AdaptationSet>
-  </Period>
-</MPD>`;
-
-      return new Response(mpdXml, {
-        headers: {
-          "Content-Type": "application/dash+xml",
-          "Cache-Control": "no-cache, no-store, must-revalidate",
-          "X-FB-Debug": "True",
-          "X-FB-Video-Codec": "avc1.4d401f",
-          ...corsHeaders
-        }
-      });
-    }
-
-    // 3. معالجة وتمرير قطع الميديا (Segments) عبر بروكسي حزم Facebook
-    if (pathname.includes("/dash/")) {
-      const parts = pathname.split("/");
-      const channelKey = parts[2];
-      const targetStreamUrl = channelMap[channelKey] || url.searchParams.get("url");
-
-      if (!targetStreamUrl) {
+      if (!targetUrl) {
         return new Response("Channel Not Found", { status: 404, headers: corsHeaders });
       }
 
       try {
-        const targetUrl = new URL(targetStreamUrl);
-
-        const upstreamResponse = await fetch(targetStreamUrl, {
+        const upstream = await fetch(targetUrl, {
           method: "GET",
           headers: {
-            "User-Agent": "FBAN/FB4A;FBAV/420.0.0.32.62;FBBV/503848123;FBDM/{density=3.0,width=1080,height=2280};FBLC/ar_AR;FBCR/Inwi;FBMF/Xiaomi;FBBD/Redmi;",
-            "Referer": "https://www.facebook.com/watch/",
+            "User-Agent": "FBAN/FB4A;FBAV/410.0.0.25.116;FBBV/480000000;FBDM/{density=3.0,width=1080,height=2340};FBLC/ar_AR;FBCR/Inwi;FBMF/Samsung;FBBD/samsung;",
+            "Referer": "https://www.facebook.com/",
             "Origin": "https://www.facebook.com",
-            "Host": targetUrl.host,
             "X-FB-HTTP-Engine": "Liger",
             "X-FB-Client-IP": "True",
             "X-FB-Server-Cluster": "True",
             "X-FB-Connection-Type": "CELLULAR.LTE",
-            "X-FB-Net-HNI": "60402",
-            "X-FB-SIM-HNI": "60402",
-            "Accept": "*/*",
+            "Accept-Encoding": "gzip, deflate, br",
             "Connection": "keep-alive"
-          },
-          cf: {
-            cacheTtlByStatus: { "200-299": 0 },
-            cacheEverything: false
           }
         });
 
-        const newHeaders = new Headers();
-        // تمويه نوع الميديا بحسب المقطع المطلق من المشغل
-        if (pathname.endsWith("init.mp4")) {
-          newHeaders.set("Content-Type", "video/mp4");
-        } else {
-          newHeaders.set("Content-Type", "video/iso.segment");
-        }
+        // إنشاء هيدرات استجابة تحاكي خوادم Facebook CDN الرسمية
+        const responseHeaders = new Headers();
+        responseHeaders.set("Content-Type", "video/mp4");
+        responseHeaders.set("Content-Disposition", "inline; filename=\"video.mp4\"");
+        responseHeaders.set("Accept-Ranges", "bytes");
+        responseHeaders.set("Cache-Control", "no-cache, no-store, must-revalidate");
+        responseHeaders.set("Pragma", "no-cache");
+        responseHeaders.set("X-FB-Debug", "True");
+        responseHeaders.set("Access-Control-Allow-Origin", "*");
 
-        newHeaders.set("Accept-Ranges", "bytes");
-        newHeaders.set("Cache-Control", "no-cache, no-store, must-revalidate");
-        newHeaders.set("Pragma", "no-cache");
-        newHeaders.set("Access-Control-Allow-Origin", "*");
-        newHeaders.set("X-FB-Video-Codec", "avc1.4d401f");
-
-        return new Response(upstreamResponse.body, {
+        return new Response(upstream.body, {
           status: 200,
-          headers: newHeaders
+          headers: responseHeaders
         });
 
       } catch (err) {
-        return new Response("Stream Error: " + err.message, {
-          status: 500,
-          headers: corsHeaders
-        });
+        return new Response("Bypass Error: " + err.message, { status: 500, headers: corsHeaders });
       }
     }
 
-    return new Response("Not Found", { status: 404, headers: corsHeaders });
+    return new Response("Dragon Live Proxy Active", { status: 200, headers: corsHeaders });
   }
 };
