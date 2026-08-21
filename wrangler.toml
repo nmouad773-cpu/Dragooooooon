@@ -1,0 +1,4 @@
+name = "dragon-star6-relay"
+main = "index.js"
+compatibility_date = "2026-01-01"
+
