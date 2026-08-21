@@ -40,18 +40,18 @@ export default {
     }
 
     if (pathname === "/") {
-      return new Response("Dragon Live DASH MPD Facebook Engine - Active", {
+      return new Response("Dragon Live Proxy Engine - Active", {
         status: 200,
         headers: { "Content-Type": "text/plain", ...corsHeaders }
       });
     }
 
-    // 1. توليد M3U بملفات MPD مموهة كروابط فيديو فيسبوك
-    if (pathname === "/playlist.m3u" || pathname === "/playlist.mpd") {
+    // 1. رابط القائمة المباشرة M3U
+    if (pathname === "/playlist.m3u" || pathname === "/playlist.m3u8") {
       let playlistContent = `#EXTM3U\n`;
       for (const key in channelMap) {
         playlistContent += `#EXTINF:-1 tvg-id="${key}" group-title="Dragon Live", ${key.toUpperCase()}\n`;
-        playlistContent += `${url.origin}/dash/live-video-${key}/manifest.mpd\n`;
+        playlistContent += `${url.origin}/live/${key}/stream.m3u8\n`;
       }
       return new Response(playlistContent, {
         headers: {
@@ -61,49 +61,34 @@ export default {
       });
     }
 
-    // 2. إنشاء Dynamic DASH MPD Manifest مطابق لفيسبوك
-    if (pathname.includes("/manifest.mpd")) {
-      const channelKey = pathname.split("/")[2].replace("live-video-", "");
+    // 2. ملف Manifest مخصص لكل قناة بروابط مموهة
+    if (pathname.endsWith("/stream.m3u8")) {
+      const channelKey = pathname.split("/")[2];
       
-      const mpdManifest = `<?xml version="1.0" encoding="UTF-8"?>
-<MPD xmlns="urn:mpeg:dash:schema:mpd:2011" 
-     xmlns:fb="urn:facebook:dash"
-     profiles="urn:mpeg:dash:profile:isoff-live:2011" 
-     type="dynamic" 
-     minimumUpdatePeriod="PT2S" 
-     minBufferTime="PT1.5S" 
-     timeShiftBufferDepth="PT30S">
-  <Period id="0" start="PT0S">
-    <AdaptationSet id="0" contentType="video" mimeType="video/mp4" segmentAlignment="true" startWithSAP="1">
-      <Representation id="fb_video_hd" bandwidth="2500000" codecs="avc1.4d401f" width="1280" height="720">
-        <SegmentTemplate timescale="1000" media="${url.origin}/dash/chunk/${channelKey}/$Number$.m4s" initialization="${url.origin}/dash/chunk/${channelKey}/init.mp4">
-          <SegmentTimeline>
-            <S t="0" d="2000" r="-1" />
-          </SegmentTimeline>
-        </SegmentTemplate>
-      </Representation>
-    </AdaptationSet>
-  </Period>
-</MPD>`;
+      const manifest = `#EXTM3U
+#EXT-X-VERSION:3
+#EXT-X-TARGETDURATION:10
+#EXT-X-MEDIA-SEQUENCE:0
+#EXTINF:10.0,
+${url.origin}/fb-video/${channelKey}/segment.mp4
+#EXT-X-RELOAD`;
 
-      return new Response(mpdManifest, {
+      return new Response(manifest, {
         headers: {
-          "Content-Type": "application/dash+xml",
-          "Cache-Control": "no-cache, no-store, must-revalidate",
-          "X-FB-Debug": "True",
+          "Content-Type": "application/vnd.apple.mpegurl",
+          "Cache-Control": "no-cache",
           ...corsHeaders
         }
       });
     }
 
-    // 3. تمرير مقاطع الميديا (Segments/Chunks) بهيدرات فيديو فيسبوك الأصلية
-    if (pathname.includes("/dash/chunk/")) {
-      const parts = pathname.split("/");
-      const channelKey = parts[3];
+    // 3. تمرير البث بهيدرات ونوع ميديا Facebook MP4
+    if (pathname.startsWith("/fb-video/")) {
+      const channelKey = pathname.split("/")[2];
       const targetStreamUrl = channelMap[channelKey];
 
       if (!targetStreamUrl) {
-        return new Response("Segment Not Found", { status: 404, headers: corsHeaders });
+        return new Response("Channel Not Found", { status: 404, headers: corsHeaders });
       }
 
       try {
@@ -123,10 +108,10 @@ export default {
         });
 
         const newHeaders = new Headers();
-        newHeaders.set("Content-Type", pathname.endsWith("init.mp4") ? "video/mp4" : "video/iso.segment");
+        // إيهام المشغل والشبكة بأن التدفق عبارة عن فيديو MP4
+        newHeaders.set("Content-Type", "video/mp4");
         newHeaders.set("Cache-Control", "no-cache, no-store, must-revalidate");
         newHeaders.set("Access-Control-Allow-Origin", "*");
-        newHeaders.set("X-FB-Video-Codec", "avc1.4d401f");
 
         return new Response(upstreamResponse.body, {
           status: 200,
@@ -134,10 +119,7 @@ export default {
         });
 
       } catch (err) {
-        return new Response("Chunk Fetch Error: " + err.message, {
-          status: 500,
-          headers: corsHeaders
-        });
+        return new Response("Stream Error: " + err.message, { status: 500, headers: corsHeaders });
       }
     }
 
